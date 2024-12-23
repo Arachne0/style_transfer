@@ -118,33 +118,31 @@ class CycleGANModel(BaseModel):
         self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B))
 
 
-    def apply_awq(self, calibration_data, bits=8):
-        """
-        calibration_data: [ (A_image_batch, B_image_batch), ... ] ÇüÅÂ·Î
-                         ÀÏºÎ Pair¸¦ ´ã°í ÀÖÀ» ¼ö ÀÖÀ½
-        bits: 8 or 4 µî
-        """
-        recorder_dict = {}
-        for name, module in self.netG_A.named_modules():
-            if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)):
-                recorder_dict[name] = ActivationRecorder()
-                module.register_forward_hook(recorder_dict[name].hook)
-
-        self.netG_A.eval()
-        with torch.no_grad():
-            for (dataA, dataB) in calibration_data:
-                # dataA, dataB: (batch, channel, height, width)
-                outA = self.netG_A(dataA)
-                outB = self.netG_B(dataB)
-                # ±»ÀÌ Discriminator forwardµµ ÇØº¼ ¼ö ÀÖÀ½:
-                # dA_out = self.netD_A(outB)
-                # dB_out = self.netD_B(outA)
-
-
-        for name, module in self.netG_A.named_modules():
-            if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)) and name in recorder_dict:
-                act_samples = torch.cat(recorder_dict[name].storage, dim=0)
-                apply_awq_to_module(module, act_samples, bits=bits)
+    # def apply_awq(self, calibration_data, bits=8):
+    #     """
+    #     bits: 8 or 4
+    #     """
+    #     recorder_dict = {}
+    #     for name, module in self.netG_A.named_modules():
+    #         if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)):
+    #             recorder_dict[name] = ActivationRecorder()
+    #             module.register_forward_hook(recorder_dict[name].hook)
+    #
+    #     self.netG_A.eval()
+    #     with torch.no_grad():
+    #         for (dataA, dataB) in calibration_data:
+    #             # dataA, dataB: (batch, channel, height, width)
+    #             outA = self.netG_A(dataA)
+    #             outB = self.netG_B(dataB)
+    #             # ±»ÀÌ Discriminator forwardµµ ÇØº¼ ¼ö ÀÖÀ½:
+    #             # dA_out = self.netD_A(outB)
+    #             # dB_out = self.netD_B(outA)
+    #
+    #
+    #     for name, module in self.netG_A.named_modules():
+    #         if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)) and name in recorder_dict:
+    #             act_samples = torch.cat(recorder_dict[name].storage, dim=0)
+    #             apply_awq_to_module(module, act_samples, bits=bits)
 
 
     def backward_D_basic(self, netD, real, fake):

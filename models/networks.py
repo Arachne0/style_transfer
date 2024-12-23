@@ -16,11 +16,31 @@ class Identity(nn.Module):
         return x
 
 
+def get_calibration_data(opt, max_batches=4):
+    opt.dataroot = 'datasets/maps/val_dataset/real'
+
+    from data import create_dataset
+    dataset = create_dataset(opt)
+    calib_data_list = []
+
+    for i, data in enumerate(dataset):
+        if i >= max_batches:
+            break
+
+        calib_data_list.append({
+            'A': data['A']
+            # ,'B': data['B']
+        })
+
+    return calib_data_list
+
+
+
 def awq_quantize_weight(weight: torch.Tensor, activation_sample: torch.Tensor, bits=8):
-    # weight.shape = (out_channels, in_channels, kH, kW) (Conv2dÀÇ °æ¿ì)
-    # activation_sample.shape = (N, in_channels, H, W) µî
+    # weight.shape = (out_channels, in_channels, kH, kW)
+    # activation_sample.shape = (N, in_channels, H, W)
     # bits=8 -> int8, bits=4 -> int4
-    qmax = 2 ** (bits - 1) - 1  # ¿¹: bits=8ÀÌ¸é 127
+    qmax = 2 ** (bits - 1) - 1
 
     out_channels = weight.shape[0]
     new_weight = weight.clone()
@@ -37,6 +57,8 @@ def awq_quantize_weight(weight: torch.Tensor, activation_sample: torch.Tensor, b
 
     return new_weight
 
+
+
 class ActivationRecorder:
     def __init__(self):
         self.storage = []
@@ -48,6 +70,7 @@ class ActivationRecorder:
         self.storage = []
 
 
+
 def apply_awq_to_module(module: nn.Module, activation_sample: torch.Tensor, bits=8):
     """
     moduleÀÌ Conv2d, Linear °°ÀºÁö È®ÀÎÇÑ µÚ, weight¿¡ AWQ quant Àû¿ë
@@ -56,24 +79,6 @@ def apply_awq_to_module(module: nn.Module, activation_sample: torch.Tensor, bits
         W = module.weight.data
         W_q = awq_quantize_weight(W, activation_sample, bits=bits)
         module.weight.data.copy_(W_q)
-
-
-# def define_G(input_nc, output_nc, ngf, netG, ...):
-#     # ¿øº» ÄÚµå¿¡¼± netG ÆÄ¶ó¹ÌÅÍ¸¦ º¸°í ResnetGenerator or UnetGenerator »ý¼º
-#     # ¿©±â¼­´Â °£´ÜÈ÷ ¿¹½Ã:
-#     if netG == 'resnet_9blocks':
-#         net = ResnetGenerator(input_nc, output_nc, ngf, ...)
-#     else:
-#         net = UnetGenerator(input_nc, output_nc, ngf, ...)
-#
-#     # net.initialize_weights() µîµî...
-#     return net
-#
-# def define_D(input_nc, ndf, netD, ...):
-#     # ¿øº» ÄÚµå¿¡¼± netD ÆÄ¶ó¹ÌÅÍ·Î NLayerDiscriminator or PixelDiscriminator µî
-#     net = NLayerDiscriminator(input_nc, ndf, ...)
-#     return net
-
 
 
 def get_norm_layer(norm_type='instance'):

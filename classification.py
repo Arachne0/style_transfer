@@ -14,7 +14,7 @@ device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 batch_size = 32
 epochs = 10
 learning_rate = 0.001
-train_data_dir = '/media/hail/HDD/style_transfer/results/maps_cyclegan/test_latest/images/'
+train_data_dir = '/results/maps_cyclegan_vanilla/test_latest/images/'
 test_data_dir = '/media/hail/HDD/style_transfer/datasets/maps/val_dataset'
 
 transform = transforms.Compose([

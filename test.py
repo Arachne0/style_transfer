@@ -1,4 +1,3 @@
-
 """General-purpose test script for image-to-image translation.
 
 Once you have trained your model with train.py, you can use this script to test the model.
@@ -9,7 +8,7 @@ It then runs inference for '--num_test' images and save results to an HTML file.
 
 Example (You need to train models first or download pre-trained models from our website):
     Test a CycleGAN model (both sides):
-        python test.py --dataroot ./datasets/maps --name maps_cyclegan --model cycle_gan
+        python test.py --dataroot ./datasets/maps --name maps_cyclegan_vanilla --model cycle_gan
 
     Test a CycleGAN model (one side only):
         python test.py --dataroot datasets/horse2zebra/testA --name horse2zebra_pretrained --model test --no_dropout
@@ -28,9 +27,11 @@ See training and test tips at: https://github.com/junyanz/pytorch-CycleGAN-and-p
 See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/qa.md
 """
 import os
+import time
 from options.test_options import TestOptions
 from data import create_dataset
 from models import create_model
+from models.networks import get_calibration_data
 from util.visualizer import save_images
 from util import html
 
@@ -51,13 +52,18 @@ if __name__ == '__main__':
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
-    # model.apply_awq(calibration_data, bits=8)  # 8-bit quantization
-    # model.apply_awq(calibration_data, bits=4)  # 4-bit quantization
+
+    calibration_data = []
+    calib_data_list = get_calibration_data(opt, max_batches=8)
+    print(f"Got {len(calib_data_list)} batches for calibration.")
+
+    model.apply_awq(calib_data_list, bits=8)   # 8-bit quantization
+    # model.apply_awq(calibration_data, bits=4)   # 4-bit quantization
 
     # initialize logger
     if opt.use_wandb:
         wandb_run = wandb.init(project=opt.wandb_project_name, entity="hails", name=opt.name, config=opt) if not wandb.run else wandb.run
-        wandb_run._label(repo='https://github.com/caliburium/dkuh_sures/tree/sh')
+        wandb_run._label(repo='CycleGAN-and-pix2pix')
 
     # create a website
     web_dir = os.path.join(opt.results_dir, opt.name, '{}_{}'.format(opt.phase, opt.epoch))  # define the website directory
@@ -70,14 +76,34 @@ if __name__ == '__main__':
     # For [CycleGAN]: It should not affect CycleGAN as CycleGAN uses instancenorm without dropout.
     if opt.eval:
         model.eval()
+
+    # Measure inference latency
+    latencies = []
     for i, data in enumerate(dataset):
         if i >= opt.num_test:  # only apply our model to opt.num_test images.
             break
+        start_time = time.time()
         model.set_input(data)  # unpack data from data loader
-        model.test()           # run inference
+        model.test()  # run inference
+        end_time = time.time()
+        latency = end_time - start_time
+        latencies.append(latency)
         visuals = model.get_current_visuals()  # get image results
-        img_path = model.get_image_paths()     # get image paths
+        img_path = model.get_image_paths()  # get image paths
         if i % 5 == 0:  # save images to an HTML file
             print('processing (%04d)-th image... %s' % (i, img_path))
-        save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize, use_wandb=opt.use_wandb)
+        save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize,
+                    use_wandb=opt.use_wandb)
     webpage.save()  # save the HTML
+
+    avg_latency = sum(latencies) / len(latencies)
+
+    # Log latency to wandb
+    if opt.use_wandb:
+        wandb.log({"total_latency" : sum(latencies),
+                   "avg_latency": avg_latency})
+
+    # Print latency results
+    print(f'Total Inference Latency: {sum(latencies):.4f} seconds')
+    print(f'Average Inference Latency: {avg_latency:.4f} seconds')
+

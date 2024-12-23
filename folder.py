@@ -2,7 +2,7 @@ import os
 import shutil
 
 # source_dir = "/media/hail/HDD/style_transfer/results/x-ray_cyclegan/test_latest/images/"
-source_dir = "/media/hail/HDD/style_transfer/results/maps_cyclegan/test_latest/images/"
+source_dir = "/results/maps_cyclegan_vanilla/test_latest/images/"
 
 real_dir = os.path.join(source_dir, "real")
 fake_dir = os.path.join(source_dir, "fake")
